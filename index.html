@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>산에 염기를 넣는 중화적정 시뮬레이션</title>
+<style>
+  :root{
+    --bg:#f7f9fc; --panel:#ffffff; --panel2:#f1f5f9; --text:#172033; --muted:#667085;
+    --border:#d9e0ea; --accent:#2563eb; --accentbg:#eaf1ff; --series:#5686d8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans KR",sans-serif;background:var(--bg);color:var(--text)}
+  .wrap{max-width:1100px;margin:0 auto;padding:24px}
+  .top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+  h1{font-size:24px;margin:0 0 6px}
+  .sub{color:var(--muted);font-size:14px}
+  button{font:inherit}
+  .btn{min-height:44px;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#fff;color:var(--text);cursor:pointer;font-weight:600}
+  .btn:hover{background:#f8fafc}
+  .btn.primary{border-color:var(--accent);background:var(--accentbg)}
+  .grid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;align-items:start}
+  .panel{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px}
+  .section-title{font-weight:700;margin-bottom:10px}
+  .apparatus{text-align:center}
+  .info{font-size:13px;margin-top:4px}
+  .info.muted{color:var(--muted)}
+  .curve-head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}
+  .phbox{text-align:right}
+  .phbox .label{font-size:12px;color:var(--muted)}
+  .phbox .value{font-size:30px;font-weight:800}
+  .checks{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}
+  .checks label{font-size:14px;display:flex;align-items:center;gap:7px}
+  input[type=checkbox]{width:18px;height:18px}
+  .chart-wrap{overflow-x:auto}
+  svg.chart{width:100%;min-width:560px;display:block}
+  .status{margin-top:8px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#fff;font-size:14px}
+  .controls{margin-top:18px;border-top:1px solid var(--border);padding-top:18px}
+  .modes{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .mode{min-height:58px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer;font-weight:700}
+  .mode small{display:block;font-weight:400;margin-top:3px}
+  .mode[aria-pressed=true]{border-color:var(--accent);background:var(--accentbg)}
+  .slider-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;margin-top:16px}
+  input[type=range]{width:100%}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  .note{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .footer{margin-top:18px;font-size:12px;color:var(--muted);text-align:center}
+  @media(max-width:760px){
+    .wrap{padding:14px}
+    h1{font-size:20px}
+    .grid{grid-template-columns:1fr}
+    .apparatus svg{max-width:210px}
+    .modes{grid-template-columns:1fr}
+    .slider-row{grid-template-columns:1fr}
+    .slider-row output{text-align:right}
+    .actions{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="wrap" id="sim">
+  <div class="top">
+    <div>
+      <h1>산에 염기를 넣는 중화적정 시뮬레이션</h1>
+      <div class="sub">0.100 M 산 10.0 mL · 0.100 M 염기 · 25 ℃</div>
+    </div>
+    <button class="btn" id="resetBtn" type="button">↺ 처음으로</button>
+  </div>
+
+  <div class="grid">
+    <section class="panel apparatus">
+      <div class="section-title" style="text-align:left">실험 장치</div>
+      <svg viewBox="0 0 190 350" style="width:100%;max-width:190px" aria-label="염기를 첨가할수록 뷰렛의 용액은 줄고 플라스크의 용액은 늘어나는 적정 장치">
+        <defs>
+          <clipPath id="flaskClip">
+            <path d="M58 215 L128 215 L116 252 L149 322 Q93 346 37 322 L70 252 Z"/>
+          </clipPath>
+        </defs>
+
+        <rect x="75" y="14" width="36" height="135" rx="4" fill="#fff" stroke="#172033" stroke-width="2"/>
+        <rect id="buretLiquid" x="78" y="18" width="30" height="127" rx="2" fill="#90b4ea" opacity=".65"/>
+        <line id="meniscus" x1="79" x2="107" y1="18" y2="18" stroke="#5686d8" stroke-width="2"/>
+        <g stroke="#172033" stroke-width="1">
+          <line x1="75" y1="36" x2="84" y2="36"/><line x1="75" y1="57" x2="84" y2="57"/>
+          <line x1="75" y1="78" x2="84" y2="78"/><line x1="75" y1="99" x2="84" y2="99"/>
+          <line x1="75" y1="120" x2="84" y2="120"/><line x1="75" y1="141" x2="84" y2="141"/>
+        </g>
+        <text x="116" y="22" font-size="10" fill="#667085">0 mL</text>
+        <text x="116" y="84" font-size="10" fill="#667085">10</text>
+        <text x="116" y="145" font-size="10" fill="#667085">20</text>
+
+        <line x1="93" y1="149" x2="93" y2="171" stroke="#172033" stroke-width="3"/>
+        <line x1="71" y1="161" x2="115" y2="161" stroke="#172033" stroke-width="4"/>
+        <circle cx="93" cy="161" r="5" fill="#2563eb"/>
+        <line x1="93" y1="171" x2="93" y2="191" stroke="#172033" stroke-width="2"/>
+        <circle id="drop" cx="93" cy="200" r="4" fill="#5686d8" opacity="0"/>
+
+        <path d="M58 215 L128 215 L116 252 L149 322 Q93 346 37 322 L70 252 Z"
+              fill="#fff" stroke="#172033" stroke-width="2.5" stroke-linejoin="round"/>
+        <rect id="flaskLiquid" x="35" y="293" width="118" height="50" fill="#f5e78b" opacity=".82" clip-path="url(#flaskClip)"/>
+        <path id="flaskSurface" d="M48 293 Q93 287 138 293" fill="none" stroke="#d8c84e" stroke-width="2" clip-path="url(#flaskClip)"/>
+        <text x="93" y="344" text-anchor="middle" font-size="12" fill="#172033">산(분석 용액)</text>
+      </svg>
+
+      <div id="buretLabel" class="info"><strong>NaOH 0.100 M</strong></div>
+      <div id="buretVolume" class="info"><strong>뷰렛 남은 양 20.0 mL</strong></div>
+      <div id="flaskVolume" class="info"><strong>플라스크 용액 10.0 mL</strong></div>
+      <div id="acidLabel" class="info muted">HCl 0.100 M · 10.0 mL</div>
+    </section>
+
+    <section class="panel">
+      <div class="curve-head">
+        <div>
+          <div class="section-title" style="margin-bottom:2px">적정 곡선</div>
+          <div id="curveCaption" class="sub">강산에 강염기를 첨가</div>
+        </div>
+        <div class="phbox">
+          <div class="label">현재 pH</div>
+          <div id="phReadout" class="value">1.00</div>
+        </div>
+      </div>
+
+      <div class="checks">
+        <label><input id="phenol" type="checkbox"> 페놀프탈레인 <span class="sub">pH 8.2–10.0</span></label>
+        <label><input id="methyl" type="checkbox"> 메틸오렌지 <span class="sub">pH 3.1–4.4</span></label>
+      </div>
+
+      <div class="chart-wrap">
+        <svg id="chart" class="chart" viewBox="0 0 620 360" aria-label="지시약 변색 범위를 표시할 수 있는 중화적정 pH 곡선">
+          <g id="bands">
+            <rect id="phenolBand" x="52" width="548" fill="#e99ac7" opacity="0"/>
+            <rect id="methylBand" x="52" width="548" fill="#efb35e" opacity="0"/>
+          </g>
+          <g id="gridLines"></g>
+          <g id="axes"></g>
+          <g id="bandLabels"></g>
+          <line id="eqLine" x1="0" x2="0" y1="26" y2="316" stroke="#667085" stroke-width="1.5" stroke-dasharray="6 5"/>
+          <text id="eqText" y="20" text-anchor="middle" font-size="12" fill="#667085">당량점</text>
+          <path id="curve" fill="none" stroke="#5686d8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path id="progressCurve" fill="none" stroke="#2563eb" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle id="point" r="6" fill="#2563eb" stroke="#fff" stroke-width="3"/>
+        </svg>
+      </div>
+      <div id="status" class="status" aria-live="polite"></div>
+    </section>
+  </div>
+
+  <section class="panel controls">
+    <div class="section-title">적정 종류</div>
+    <div class="modes" role="group" aria-label="적정 종류 선택">
+      <button type="button" class="mode" data-mode="ss">강산 + 강염기<small>HCl + NaOH</small></button>
+      <button type="button" class="mode" data-mode="ws">약산 + 강염기<small>CH₃COOH + NaOH</small></button>
+      <button type="button" class="mode" data-mode="sw">강산 + 약염기<small>HCl + NH₃</small></button>
+    </div>
+
+    <div class="slider-row">
+      <label for="volSlider"><strong>염기 첨가량</strong></label>
+      <input id="volSlider" type="range" min="0" max="20" step="0.1" value="0"/>
+      <output id="volOut" for="volSlider"><strong>0.0 mL</strong></output>
+    </div>
+
+    <div class="actions">
+      <button id="addBtn" type="button" class="btn primary">+ 0.5 mL 첨가</button>
+      <button id="eqBtn" type="button" class="btn">당량점으로 이동</button>
+    </div>
+
+    <div class="note">
+      페놀프탈레인 변색 범위: pH 8.2–10.0 · 메틸오렌지 변색 범위: pH 3.1–4.4<br>
+      약산은 아세트산(Kₐ=1.8×10⁻⁵), 약염기는 암모니아(Kᵦ=1.8×10⁻⁵)를 사용한 이론적 계산입니다.
+    </div>
+  </section>
+
+  <div class="footer">수업용 중화적정 시뮬레이션</div>
+</div>
+
+<script>
+(() => {
+  const root = document.getElementById('sim');
+  const $ = s => root.querySelector(s);
+  const $$ = s => [...root.querySelectorAll(s)];
+
+  const slider=$('#volSlider'), out=$('#volOut'), phOut=$('#phReadout'), status=$('#status');
+  const curve=$('#curve'), progress=$('#progressCurve'), point=$('#point'), eqLine=$('#eqLine'), eqText=$('#eqText');
+  const flaskLiquid=$('#flaskLiquid'), flaskSurface=$('#flaskSurface');
+  const buretLiquid=$('#buretLiquid'), meniscus=$('#meniscus'), drop=$('#drop');
+  const phenol=$('#phenol'), methyl=$('#methyl'), phenolBand=$('#phenolBand'), methylBand=$('#methylBand'), labels=$('#bandLabels');
+
+  const Ka=1.8e-5, Kb=1.8e-5, Kw=1e-14, Ca=0.1, Cb=0.1, Va=0.010, Veq=10, buretCapacity=20;
+  let mode='ss';
+
+  const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+  const log10=x=>Math.log(x)/Math.LN10;
+
+  function weakAcidPH(C,K){
+    const H=(-K+Math.sqrt(K*K+4*K*C))/2;
+    return -log10(H);
+  }
+
+  function ph(vml){
+    const Vb=vml/1000, nt=Cb*Vb, na=Ca*Va, V=Va+Vb, eps=1e-10;
+
+    if(mode==='ss'){
+      if(nt<na-eps) return -log10((na-nt)/V);
+      if(Math.abs(nt-na)<=eps) return 7;
+      return 14+log10((nt-na)/V);
+    }
+
+    if(mode==='ws'){
+      if(nt<eps) return weakAcidPH(Ca,Ka);
+      if(nt<na-eps) return -log10(Ka)+log10(nt/(na-nt));
+      if(Math.abs(nt-na)<=eps){
+        const K=Kw/Ka, C=na/V;
+        const OH=(-K+Math.sqrt(K*K+4*K*C))/2;
+        return 14+log10(OH);
+      }
+      return 14+log10((nt-na)/V);
+    }
+
+    if(nt<na-eps) return -log10((na-nt)/V);
+    if(Math.abs(nt-na)<=eps){
+      const Kacid=Kw/Kb, C=na/V;
+      return weakAcidPH(C,Kacid);
+    }
+    const nNH4=na, nNH3=nt-na;
+    const pOH=-log10(Kb)+log10(nNH4/nNH3);
+    return 14-pOH;
+  }
+
+  const left=52,right=600,top=26,bottom=316,w=right-left,h=bottom-top;
+  const X=v=>left+(v/20)*w;
+  const Y=p=>bottom-(clamp(p,0,14)/14)*h;
+
+  function makePath(maxV=20){
+    let d='';
+    const steps=Math.max(1,Math.round(maxV*20));
+    for(let i=0;i<=steps;i++){
+      const v=maxV*i/steps;
+      d+=(i?'L':'M')+X(v).toFixed(1)+' '+Y(ph(v)).toFixed(1)+' ';
+    }
+    return d;
+  }
+
+  function drawAxes(){
+    let gs='', as='';
+    [0,2,4,6,8,10,12,14].forEach(p=>{
+      const y=Y(p);
+      gs+=`<line x1="${left}" x2="${right}" y1="${y}" y2="${y}" stroke="#d9e0ea" opacity=".85"/>
+           <text x="${left-10}" y="${y+4}" text-anchor="end" font-size="12" fill="#667085">${p}</text>`;
+    });
+    [0,2,4,6,8,10,12,14,16,18,20].forEach(v=>{
+      const x=X(v);
+      gs+=`<line x1="${x}" x2="${x}" y1="${top}" y2="${bottom}" stroke="#e7ebf1" opacity=".8"/>
+           <text x="${x}" y="${bottom+20}" text-anchor="middle" font-size="12" fill="#667085">${v}</text>`;
+    });
+    as=`<line x1="${left}" x2="${left}" y1="${top}" y2="${bottom}" stroke="#172033" stroke-width="1.6"/>
+        <line x1="${left}" x2="${right}" y1="${bottom}" y2="${bottom}" stroke="#172033" stroke-width="1.6"/>
+        <text x="${left+4}" y="18" font-size="13" font-weight="700" fill="#172033">pH</text>
+        <text x="${(left+right)/2}" y="354" text-anchor="middle" font-size="13" font-weight="700" fill="#172033">첨가한 염기의 부피 (mL)</text>`;
+    $('#gridLines').innerHTML=gs;
+    $('#axes').innerHTML=as;
+  }
+
+  function updateIndicatorBands(){
+    const py1=Y(10.0), py2=Y(8.2);
+    phenolBand.setAttribute('y',Math.min(py1,py2));
+    phenolBand.setAttribute('height',Math.abs(py2-py1));
+    phenolBand.setAttribute('opacity',phenol.checked?'.22':'0');
+
+    const my1=Y(4.4), my2=Y(3.1);
+    methylBand.setAttribute('y',Math.min(my1,my2));
+    methylBand.setAttribute('height',Math.abs(my2-my1));
+    methylBand.setAttribute('opacity',methyl.checked?'.24':'0');
+
+    let html='';
+    if(phenol.checked) html+=`<text x="${right-5}" y="${Y(9.1)+4}" text-anchor="end" font-size="11" font-weight="700" fill="#172033">페놀프탈레인 8.2–10.0</text>`;
+    if(methyl.checked) html+=`<text x="${right-5}" y="${Y(3.75)+4}" text-anchor="end" font-size="11" font-weight="700" fill="#172033">메틸오렌지 3.1–4.4</text>`;
+    labels.innerHTML=html;
+  }
+
+  function liquidColor(p){
+    if(p<3) return '#efb3aa';
+    if(p<5) return '#f1c68b';
+    if(p<6.5) return '#eadc88';
+    if(p<7.5) return '#a9d99a';
+    if(p<9) return '#84c9bc';
+    if(p<11) return '#9eb6df';
+    return '#b8a5df';
+  }
+
+  function updateBuret(v){
+    const remaining=clamp(buretCapacity-v,0,buretCapacity);
+    const fullY=18, fullH=127;
+    const fraction=remaining/buretCapacity;
+    const hh=fullH*fraction;
+    const y=fullY+(fullH-hh);
+
+    buretLiquid.setAttribute('y',y.toFixed(1));
+    buretLiquid.setAttribute('height',hh.toFixed(1));
+    meniscus.setAttribute('y1',y.toFixed(1));
+    meniscus.setAttribute('y2',y.toFixed(1));
+    $('#buretVolume').innerHTML=`<strong>뷰렛 남은 양 ${remaining.toFixed(1)} mL</strong>`;
+  }
+
+  function updateFlask(v,p){
+    const total=10+v;
+    const minY=293, maxRise=49;
+    const fraction=clamp(v/20,0,1);
+    const y=minY-maxRise*fraction;
+    const height=343-y;
+    const color=liquidColor(p);
+
+    flaskLiquid.setAttribute('y',y.toFixed(1));
+    flaskLiquid.setAttribute('height',height.toFixed(1));
+    flaskLiquid.setAttribute('fill',color);
+    flaskSurface.setAttribute('d',`M${(48-7*fraction).toFixed(1)} ${y.toFixed(1)} Q93 ${(y-6).toFixed(1)} ${(138+7*fraction).toFixed(1)} ${y.toFixed(1)}`);
+    flaskSurface.setAttribute('stroke',color);
+    $('#flaskVolume').innerHTML=`<strong>플라스크 용액 ${total.toFixed(1)} mL</strong>`;
+  }
+
+  function describe(v,p){
+    const region=v<Veq-.05?'당량점 전':v>Veq+.05?'당량점 후':'당량점';
+    const names={ss:'HCl에 NaOH',ws:'CH₃COOH에 NaOH',sw:'HCl에 NH₃'};
+    let extra='';
+
+    if(Math.abs(v-Veq)<.05){
+      if(mode==='ss') extra=' 강산과 강염기의 당량점이므로 pH는 7입니다.';
+      if(mode==='ws') extra=' 생성된 CH₃COO⁻가 물과 반응해 OH⁻를 만들므로 pH가 7보다 큽니다.';
+      if(mode==='sw') extra=' 생성된 NH₄⁺가 물과 반응해 H₃O⁺를 만들므로 pH가 7보다 작습니다.';
+    }else if(mode==='ws'&&v>0&&v<Veq){
+      extra=' 약산과 짝염기가 함께 존재해 완충 작용이 나타납니다.';
+    }
+
+    return `${names[mode]} ${v.toFixed(1)} mL를 첨가했습니다. pH ${p.toFixed(2)}, ${region}입니다.${extra}`;
+  }
+
+  function update(animate=false){
+    const v=clamp(parseFloat(slider.value)||0,0,20);
+    slider.value=v;
+    out.innerHTML=`<strong>${v.toFixed(1)} mL</strong>`;
+
+    const p=clamp(ph(v),0,14);
+    phOut.textContent=p.toFixed(2);
+
+    updateBuret(v);
+    updateFlask(v,p);
+    updateIndicatorBands();
+
+    curve.setAttribute('d',makePath(20));
+    progress.setAttribute('d',makePath(v));
+    point.setAttribute('cx',X(v));
+    point.setAttribute('cy',Y(p));
+    eqLine.setAttribute('x1',X(Veq));
+    eqLine.setAttribute('x2',X(Veq));
+    eqText.setAttribute('x',X(Veq));
+    status.textContent=describe(v,p);
+
+    if(animate && window.matchMedia && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      drop.animate(
+        [{opacity:0,transform:'translateY(-5px)'},{opacity:1},{opacity:0,transform:'translateY(22px)'}],
+        {duration:450}
+      );
+    }
+  }
+
+  function setMode(m){
+    mode=m;
+    slider.value=0;
+    $$('.mode').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===m)));
+
+    const cfg={
+      ss:['강산에 강염기를 첨가','HCl 0.100 M · 10.0 mL','NaOH 0.100 M'],
+      ws:['약산에 강염기를 첨가','CH₃COOH 0.100 M · 10.0 mL','NaOH 0.100 M'],
+      sw:['강산에 약염기를 첨가','HCl 0.100 M · 10.0 mL','NH₃ 0.100 M']
+    }[m];
+
+    $('#curveCaption').textContent=cfg[0];
+    $('#acidLabel').textContent=cfg[1];
+    $('#buretLabel').innerHTML=`<strong>${cfg[2]}</strong>`;
+    update();
+  }
+
+  drawAxes();
+  $$('.mode').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+  slider.addEventListener('input',()=>update());
+  phenol.addEventListener('change',updateIndicatorBands);
+  methyl.addEventListener('change',updateIndicatorBands);
+
+  $('#addBtn').addEventListener('click',()=>{
+    slider.value=clamp((parseFloat(slider.value)||0)+.5,0,20);
+    update(true);
+  });
+
+  $('#eqBtn').addEventListener('click',()=>{
+    slider.value=Veq;
+    update(true);
+  });
+
+  $('#resetBtn').addEventListener('click',()=>{
+    phenol.checked=false;
+    methyl.checked=false;
+    setMode(mode);
+  });
+
+  setMode('ss');
+})();
+</script>
+</body>
+</html>
